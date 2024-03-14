@@ -1,85 +1,112 @@
 import plotly.express as px
 from shiny.express import input, ui
 from shinywidgets import render_plotly, render_widget
-from palmerpenguins import load_penguins  # This package provides the Palmer Penguins dataset
+from palmerpenguins import load_penguins# This package provides the Palmer Penguins dataset
+import palmerpenguins
 import pandas as pd
 import seaborn as sns
 import plotly.graph_objects as go
 from shiny import reactive, render, req
 
 # Use the built-in function to load the Palmer Penguins dataset
-penguins = load_penguins()
+penguins_df = palmerpenguins.load_penguins()
 
-# Clean data as necessary right after loading
-penguins.fillna(0, inplace=True)
-penguins.dropna(inplace=True)
-
+# Name the page
 ui.page_opts(title="TFMONTAGUE's Penguin Data", fillable=True)
+
+# Change the background color of the dashboard
+ui.HTML("""
+<style>
+  body {
+    background-color: #808080; /* dark gray background */
+  }
+</style>
+""")
 
 # Add a Shiny UI sidebar for user interaction
 with ui.sidebar(open="open"):  
     # Use ui.HTML() to include an h2 header with custom styling
-    ui.HTML('<h2 style="font-size: smaller;">Dashboard Configuration Options</h2>')
+    ui.HTML('<h3 style="font-size: medium;">Dashboard Configuration Options</h3>')
+
+    # Create dropdown input
     ui.input_selectize("selected_attribute", "Select an attribute below:", 
                        ["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g"])
+
+    # Create numeric input for number of plotly histogram bins
     ui.input_numeric("plotly_bin_count", "Number of Plotly Histogram Bins", value=20, min=1, max=100)
+
+    # Create slider input for number of seaborn bins
     ui.input_slider("seaborn_bin_count", "Number of Seaborn Bins", min=1, max=50, value=10)
+
+    # Create checkbox for species group input
     ui.input_checkbox_group("selected_species_list", "Filter by Species", 
                             choices=["Adelie", "Gentoo", "Chinstrap"], 
                             selected=["Adelie"], inline=True)
+
+    # Add horizontal rule to sidebar
     ui.hr()
+
+    # Add hyperlink to github repo
     ui.a("TFMONTAGUE's P2 Repo", href="https://github.com/tfmontague/cintel-02-data", target="_blank")
 
+    # Create text output of selected inputs
     @render.ui
     def selected_info2():
         selected_attribute = input.selected_attribute()
         plotly_bin_count = input.plotly_bin_count()
         seaborn_bin_count = input.seaborn_bin_count()
+        selected_species = input.selected_species_list()  # Get the selected species from the checkbox group
+        selected_species_str = ", ".join(selected_species)
+        
+        # Style text output
         info_html = f"""
         <div style="font-size: 65%; line-height: 1;">
-            <h4 style="margin-bottom: 0;">Selected Configuration:</h4>
-            <p style="margin-top: 0; margin-bottom: 0;"><strong>Selected attribute:</strong> {selected_attribute}</p>
-            <p style="margin-top: 0; margin-bottom: 0;"><strong>Plotly bin count:</strong> {plotly_bin_count}</p>
-            <p style="margin-top: 0;"><strong>Seaborn bin count:</strong> {seaborn_bin_count}</p>
+            <h6 style="margin-bottom: 0;">Selected Configuration:</h6>
+            <p style="margin-top: 1; margin-bottom: 1;"><strong>Selected attribute:</strong> {selected_attribute}</p>
+            <p style="margin-top: 1; margin-bottom: 1;"><strong>Plotly bin count:</strong> {plotly_bin_count}</p>
+            <p style="margin-top: 1; margin-bottom: 1;"><strong>Seaborn bin count:</strong> {seaborn_bin_count}</p>
+            <p style="margin-top: 1; margin-bottom: 1;"><strong>Selected species:</strong> {selected_species_str}</p>
         </div>
         """
         return ui.HTML(info_html)
 
 # Main content
 with ui.layout_columns():
-    # Displaying DataTable and DataGrid
+    
+    # Display DataTable with all data
     with ui.card():
         ui.card_header("Palmer Penguins Data Table")
         penguins = load_penguins()
-        @render.data_frame  
-        def penguins_df():
-            return render.DataTable(penguins)  
+        @render.data_frame
+        def render_penguins_table():
+            return filtered_data()
+            
+    # Display DataGrid with all data
     with ui.card():
         ui.card_header("Palmer Penguins Data Grid")
         @render.data_frame
-        def penguins_df2():
-            return render.DataGrid(penguins)
+        def penguins_data():
+            return render.DataGrid(filtered_data(), row_selection_mode="multiple")
 
-# Plotly Histogram, Seaborn Histogram
+
 with ui.layout_columns():
+    # Create Plotly Histogram with all species
     with ui.card():
         ui.card_header("Plotly Histogram: All Species")
-        @render_widget  
-        def plot():  
-            scatterplot = px.histogram(
-                data_frame=penguins,
-                x="body_mass_g",
-                nbins=input.plotly_bin_count(),
-                ).update_layout(
-                    title={"text": "Penguin Mass", "x": 0.5},
-                    yaxis_title="Count",
-                    xaxis_title="Body Mass (g)",
-                )
-            return scatterplot
+        @render_plotly  
+        def plotly_histogram():  
+            return px.histogram(
+              filtered_data(), 
+              x=input.selected_attribute(), 
+              nbins=input.plotly_bin_count(),  # Add a comma here
+              color="species",
+              )     
+
+    # Create Seaborn Histogram with all species
     with ui.card():
         ui.card_header("Seaborn Histogram: All Species")
         @render.plot
-        def plot2():
+        def seaborn_histogram():
             # Generate the Seaborn histogram based on the selected attribute and bin count
             ax = sns.histplot(data=penguins, x=input.selected_attribute(), bins=input.seaborn_bin_count())  
             ax.set_title("Palmer Penguins")
@@ -87,19 +114,15 @@ with ui.layout_columns():
             ax.set_ylabel("Count")
             return ax           
 
-# Full screen card for Plotly Scatterplot
-penguins['bill_length_mm'].fillna(penguins['bill_length_mm'].median(), inplace=True)
-
+# Create full screen card for Plotly Scatterplot
 with ui.card(full_screen=True):
     ui.card_header("Plotly Scatterplot: Species")
     @render_plotly
     def plotly_scatterplot():
-        scatterplot2 = px.scatter(
-            data_frame=penguins,
+        return px.scatter(filtered_data(),
             x="flipper_length_mm",
             y="body_mass_g",
             color="species",
-            size="bill_length_mm",
             hover_name="island",
             labels={
                 "flipper_length_mm": "Flipper Length (mm)",
@@ -108,9 +131,9 @@ with ui.card(full_screen=True):
                 "bill_length_mm": "Bill Length (mm)",
                 "island": "Island"
             },
-            title="Penguin Species Measurements"
+            title="Penguin Species Measurements",
+            size_max=12
         )
-        return scatterplot2
 
 # --------------------------------------------------------
 # Reactive calculations and effects
@@ -123,6 +146,9 @@ with ui.card(full_screen=True):
 
 @reactive.calc
 def filtered_data():
-    return penguins_df
+    selected_species = input.selected_species_list()  # Get the list of selected species
+    filtered_df = penguins_df[penguins_df['species'].isin(selected_species)]  # Filter the DataFrame
+    return filtered_df
+
 
 
