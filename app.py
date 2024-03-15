@@ -14,11 +14,28 @@ penguins_df = palmerpenguins.load_penguins()
 # Name the page
 ui.page_opts(title="TFMONTAGUE's Penguin Data", fillable=True)
 
-# Change the background color of the dashboard
+# Customize the dashboard style
 ui.HTML("""
 <style>
   body {
-    background-color: #808080; /* dark gray background */
+    background-color: #808080; /* dark grey background */
+    color: #333; /* Dark grey text */
+  }
+  .shiny-input-container > label, .shiny-widget-output-header {
+    color: #005b96; /* Dark blue for headings and labels */
+  }
+  .card {
+    background-color: #f0f4f8; /* light blue background for cards */
+    border-radius: 8px; /* Rounded corners for cards */
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); /* Subtle shadow for cards */
+    margin-bottom: 20px; /* Space between cards */
+  }
+  .btn-primary {
+    background-color: #007bff; /* Blue button backgrounds */
+    border-color: #007bff; /* Blue button borders */
+  }
+  .form-control, .selectize-control.single .selectize-input, .selectize-dropdown {
+    border-radius: 4px; /* Rounded corners for input fields and selectize dropdown */
   }
 </style>
 """)
@@ -29,20 +46,25 @@ with ui.sidebar(open="open"):
     ui.HTML('<h3 style="font-size: medium;">Dashboard Configuration Options</h3>')
 
     # Create dropdown input
-    ui.input_selectize("selected_attribute", "Select an attribute below:", 
+    ui.input_selectize("selected_attribute", "Select an attribute:", 
                        ["bill_length_mm", "bill_depth_mm", "flipper_length_mm", "body_mass_g"])
 
     # Create numeric input for number of plotly histogram bins
-    ui.input_numeric("plotly_bin_count", "Number of Plotly Histogram Bins", value=20, min=1, max=100)
+    ui.input_numeric("plotly_bin_count", "# of Histogram Bins:", value=20, min=1, max=100)
 
     # Create slider input for number of seaborn bins
-    ui.input_slider("seaborn_bin_count", "Number of Seaborn Bins", min=1, max=50, value=10)
+    ui.input_slider("seaborn_bin_count", "# of Seaborn Bins:", min=1, max=50, value=10)
 
     # Create checkbox for species group input
-    ui.input_checkbox_group("selected_species_list", "Filter by Species", 
+    ui.input_checkbox_group("selected_species_list", "Filter by Species:", 
                             choices=["Adelie", "Gentoo", "Chinstrap"], 
                             selected=["Adelie"], inline=True)
 
+    # Create checkbox group for island selection
+    ui.input_checkbox_group("selected_island_list", "Filter by Island:", 
+                            choices=["Torgersen", "Biscoe", "Dream"], 
+                            selected=["Torgersen", "Biscoe", "Dream"], inline=True)
+    
     # Add horizontal rule to sidebar
     ui.hr()
 
@@ -57,6 +79,8 @@ with ui.sidebar(open="open"):
         seaborn_bin_count = input.seaborn_bin_count()
         selected_species = input.selected_species_list()  # Get the selected species from the checkbox group
         selected_species_str = ", ".join(selected_species)
+        selected_island = input.selected_island_list()  # Get the selected islands from the checkbox group
+        selected_island_str = ", ".join(selected_island)
         
         # Style text output
         info_html = f"""
@@ -66,6 +90,7 @@ with ui.sidebar(open="open"):
             <p style="margin-top: 1; margin-bottom: 1;"><strong>Plotly bin count:</strong> {plotly_bin_count}</p>
             <p style="margin-top: 1; margin-bottom: 1;"><strong>Seaborn bin count:</strong> {seaborn_bin_count}</p>
             <p style="margin-top: 1; margin-bottom: 1;"><strong>Selected species:</strong> {selected_species_str}</p>
+            <p style="margin-top: 1; margin-bottom: 1;"><strong>Selected islands:</strong> {selected_island_str}</p>
         </div>
         """
         return ui.HTML(info_html)
@@ -144,11 +169,13 @@ with ui.card(full_screen=True):
 # The function will be called whenever an input functions used to generate that output changes.
 # Any output that depends on the reactive function (e.g., filtered_data()) will be updated when the data changes.
 
+# Reactive calculation to filter the data by selected species and islands
 @reactive.calc
 def filtered_data():
-    selected_species = input.selected_species_list()  # Get the list of selected species
-    filtered_df = penguins_df[penguins_df['species'].isin(selected_species)]  # Filter the DataFrame
+    selected_species = input.selected_species_list()
+    selected_islands = input.selected_island_list()  # Get the list of selected islands
+    filtered_df = penguins_df[(penguins_df['species'].isin(selected_species)) & 
+                              (penguins_df['island'].isin(selected_islands))]  # Apply both filters
     return filtered_df
-
 
 
